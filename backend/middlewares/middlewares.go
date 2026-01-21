@@ -1,6 +1,7 @@
 package middlewares
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"strings"
@@ -9,6 +10,10 @@ import (
 )
 
 var JwtKey = []byte(getEnv("JWT_SECRET", "sude-gizli"))
+
+type contextKey string
+
+const UserIDKey contextKey = "user_id"
 
 func getEnv(key, defaultValue string) string {
 	value := os.Getenv(key)
@@ -21,9 +26,7 @@ func getEnv(key, defaultValue string) string {
 func CorsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
 		if r.Method == "OPTIONS" {
@@ -57,6 +60,25 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			http.Error(w, `{"message":"Gecersiz token"}`, http.StatusUnauthorized)
+			return
+		}
+
+		userID := claims["user_id"].(string)
+
+		ctx := context.WithValue(r.Context(), UserIDKey, userID)
+		r = r.WithContext(ctx)
+
 		next(w, r)
 	}
+}
+
+func GetUserID(r *http.Request) string {
+	userID, ok := r.Context().Value(UserIDKey).(string)
+	if !ok {
+		return ""
+	}
+	return userID
 }

@@ -7,20 +7,22 @@ import (
 	"time"
 
 	"todo-backend/database"
+	"todo-backend/middlewares"
 	"todo-backend/models"
 
 	"github.com/google/uuid"
 )
 
-
 func TodosHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+
+	userID := middlewares.GetUserID(r)
 
 	switch r.Method {
 
 	case "GET":
 		var todos []models.Todo
-		database.DB.Order("created_at desc").Find(&todos)
+		database.DB.Where("user_id = ?", userID).Order("created_at desc").Find(&todos)
 		json.NewEncoder(w).Encode(todos)
 
 	case "POST":
@@ -32,9 +34,10 @@ func TodosHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		todo.ID = uuid.New().String() 
-		todo.CreatedAt = time.Now()   
-		todo.Completed = false        
+		todo.ID = uuid.New().String()
+		todo.UserID = userID 
+		todo.CreatedAt = time.Now()
+		todo.Completed = false
 
 		database.DB.Create(&todo)
 
@@ -48,6 +51,8 @@ func TodosHandler(w http.ResponseWriter, r *http.Request) {
 func TodoByIdHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	userID := middlewares.GetUserID(r)
+
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/todos/")
 	id := strings.TrimSuffix(path, "/")
 
@@ -60,8 +65,7 @@ func TodoByIdHandler(w http.ResponseWriter, r *http.Request) {
 
 	case "GET":
 		var todo models.Todo
-
-		result := database.DB.First(&todo, "id = ?", id)
+		result := database.DB.First(&todo, "id = ? AND user_id = ?", id, userID)
 
 		if result.Error != nil {
 			http.Error(w, `{"message":"Todo bulunamadi"}`, http.StatusNotFound)
@@ -72,8 +76,7 @@ func TodoByIdHandler(w http.ResponseWriter, r *http.Request) {
 
 	case "PUT":
 		var todo models.Todo
-
-		result := database.DB.First(&todo, "id = ?", id)
+		result := database.DB.First(&todo, "id = ? AND user_id = ?", id, userID)
 		if result.Error != nil {
 			http.Error(w, `{"message":"Todo bulunamadi"}`, http.StatusNotFound)
 			return
@@ -91,7 +94,7 @@ func TodoByIdHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(todo)
 
 	case "DELETE":
-		result := database.DB.Delete(&models.Todo{}, "id = ?", id)
+		result := database.DB.Delete(&models.Todo{}, "id = ? AND user_id = ?", id, userID)
 
 		if result.RowsAffected == 0 {
 			http.Error(w, `{"message":"Todo bulunamadi"}`, http.StatusNotFound)
